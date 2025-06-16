@@ -518,7 +518,7 @@ function updateTopHolders(holders) {
             list.innerHTML = '';
             for (const holder of enriched) {
                 const short = `${holder.address.slice(0, 4)}...${holder.address.slice(-4)}`;
-                const displayText = formatTokenDisplay(holder.amount, currentTokenDecimals, currentTokenPrice);
+                const displayText = await fetchHolderAsset(holder.address);
                 const li = document.createElement('li');
                 li.className = 'holder-entry';
                 li.innerHTML = `
@@ -537,7 +537,7 @@ function updateTopHolders(holders) {
             if (cachedTopHolders.length > 0) {
                 for (const holder of cachedTopHolders) {
                     const short = `${holder.address.slice(0, 4)}...${holder.address.slice(-4)}`;
-                    const displayText = formatTokenDisplay(holder.amount, currentTokenDecimals, currentTokenPrice);
+                    const displayText = await fetchHolderAsset(holder.address);
                     const li = document.createElement('li');
                     li.className = 'holder-entry';
                     li.innerHTML = `
