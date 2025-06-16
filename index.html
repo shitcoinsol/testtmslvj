@@ -450,24 +450,24 @@ function updateTopHolders(holders) {
       return /^([1-9A-HJ-NP-Za-km-z]{32,44})$/.test(addr);
     }
 
-    function fetchTopHolders(ca, apiKey, listId = 'holders-list') {
-        const list = document.getElementById(listId);
-        if (!list) return;
+    function fetchTopHolders(ca, apiKey) {
         const url = `https://pro-api.solscan.io/v2.0/token/holders?address=${ca}&page=1&page_size=10`;
         fetch(url, { headers: { token: apiKey } })
         .then(r => r.json())
         .then(data => {
           if (!data || !data.data) throw new Error('holder fail');
-          list.innerHTML = data.data.items.slice(0, 10).map(it => {
-            const addr = it.owner;
-            const pct = Number(it.percentage || 0);
-            const short = `${addr.slice(0,4)}...${addr.slice(-4)}`;
-            return `<li><a class="address-link" href="https://solscan.io/account/${addr}" target="_blank">${short}</a> - ${pct.toFixed(1)}%</li>`;
-          }).join('');
+          const holders = data.data.items.slice(0, 10).map(it => ({
+            address: it.owner,
+            percentage: Number(it.percentage || 0)
+          }));
+          updateTopHolders(holders);
         })
         .catch(err => {
           console.error(err);
-          list.innerHTML = '<li>Error loading holders</li>';
+          const list = document.getElementById('holders-list');
+          if (list) list.innerHTML = '<li>Error loading holders</li>';
+          const mobile = document.getElementById('holders-list-mobile');
+          if (mobile && mobile !== list) mobile.innerHTML = '<li>Error loading holders</li>';
         });
     }
 
@@ -795,8 +795,8 @@ function updateTopHolders(holders) {
           fetchDevHistory(ca, solscanKey);
           fetchDevActivity(ca, solscanKey, heliusKey);
           if (holdersInterval) clearInterval(holdersInterval);
-          fetchTopHolders(ca, solscanKey, 'holders-list-mobile');
-          holdersInterval = setInterval(() => fetchTopHolders(ca, solscanKey, 'holders-list-mobile'), 10000);
+          fetchTopHolders(ca, solscanKey);
+          holdersInterval = setInterval(() => fetchTopHolders(ca, solscanKey), 10000);
         })
         .catch((err) => {
           console.error(err);
