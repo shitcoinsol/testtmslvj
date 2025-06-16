@@ -313,11 +313,18 @@
 .dev-activity .tag.sell { background-color: #dc3545; }
 .dev-activity .tag.sent { background-color: #6c757d; }
 
-/* Top holder asset display */
-.top-holder-asset {
-  font-size: 13px;
-  color: #666;
-  margin-top: 4px;
+/* Holder entry layout */
+.holder-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+.holder-right {
+  text-align: right;
+  font-weight: bold;
+  color: #333;
 }
 
 /* Responsive toggling */
@@ -377,6 +384,9 @@ function updateTopHolders(holders) {
     let currentCA = '';
     let cachedTopHolders = [];
     let isFirstLoad = true;
+    let currentTokenPrice = 0;
+    let currentTokenSymbol = '';
+    let currentTokenDecimals = 0;
 
     function handleKeyPress(e) {
       if (e.key === "Enter") searchToken();
@@ -384,6 +394,12 @@ function updateTopHolders(holders) {
 
     function isValidSolanaAddress(addr) {
       return /^([1-9A-HJ-NP-Za-km-z]{32,44})$/.test(addr);
+    }
+
+    function formatNumber(num) {
+        if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'm';
+        if (num >= 1_000) return (num / 1_000).toFixed(1) + 'k';
+        return num.toString();
     }
 
     async function fetchHolderAsset(address) {
@@ -450,25 +466,28 @@ function updateTopHolders(holders) {
             if (!data?.data?.items) throw new Error("Invalid holder response");
             const items = data.data.items.slice(0, 10);
 
-            const enriched = await Promise.all(items.map(async (it) => {
-                const asset = await fetchHolderAsset(it.owner);
+            const enriched = items.map(it => {
+                let amt = Number(it.amount || it.balance || it.uiAmount || (it.tokenAmount ? (Number(it.tokenAmount.amount) / Math.pow(10, it.tokenAmount.decimals || currentTokenDecimals)) : 0));
+                if (isNaN(amt)) amt = 0;
                 return {
-                    address: it.owner,
-                    percentage: Number(it.percentage || 0),
-                    asset: asset
+                    address: it.owner || it.address,
+                    amount: amt
                 };
-            }));
+            });
 
             cachedTopHolders = enriched;
 
             list.innerHTML = '';
             for (const holder of enriched) {
                 const short = `${holder.address.slice(0, 4)}...${holder.address.slice(-4)}`;
+                const displayAmount = formatNumber(holder.amount) + ' ' + currentTokenSymbol;
+                const usd = holder.amount * currentTokenPrice;
+                const displayUSD = '$' + formatNumber(usd);
                 const li = document.createElement('li');
+                li.className = 'holder-entry';
                 li.innerHTML = `
-        <a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${short}</a> - ${holder.percentage.toFixed(1)}%
-        <div class="top-holder-asset">${holder.asset}</div>
-      `;
+        <a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${short}</a>
+        <div class="holder-right">${displayAmount} · ${displayUSD}</div>`;
                 list.appendChild(li);
             }
 
@@ -482,11 +501,14 @@ function updateTopHolders(holders) {
             if (cachedTopHolders.length > 0) {
                 for (const holder of cachedTopHolders) {
                     const short = `${holder.address.slice(0, 4)}...${holder.address.slice(-4)}`;
+                    const displayAmount = formatNumber(holder.amount) + ' ' + currentTokenSymbol;
+                    const usd = holder.amount * currentTokenPrice;
+                    const displayUSD = '$' + formatNumber(usd);
                     const li = document.createElement('li');
+                    li.className = 'holder-entry';
                     li.innerHTML = `
-          <a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${short}</a> - ${holder.percentage.toFixed(1)}%
-          <div class="top-holder-asset">${holder.asset}</div>
-        `;
+          <a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${short}</a>
+          <div class="holder-right">${displayAmount} · ${displayUSD}</div>`;
                     list.appendChild(li);
                 }
             } else {
@@ -571,6 +593,10 @@ function updateTopHolders(holders) {
 
           document.getElementById("token-price").textContent =
             "$" + Number(price.usdPrice).toFixed(6);
+
+          currentTokenPrice = Number(price.usdPrice);
+          currentTokenSymbol = meta.data.symbol;
+          currentTokenDecimals = Number(meta.data.decimals || 0);
 
           const marketCap = Number(meta.data.market_cap).toLocaleString();          const supply = Number(meta.data.supply).toLocaleString();
 
@@ -807,6 +833,10 @@ function updateTopHolders(holders) {
 
           const priceEl = document.querySelector('#mobile-result .token-price');
           if (priceEl) priceEl.textContent = '$' + Number(price.usdPrice).toFixed(6);
+
+          currentTokenPrice = Number(price.usdPrice);
+          currentTokenSymbol = meta.data.symbol;
+          currentTokenDecimals = Number(meta.data.decimals || 0);
 
           const marketCap = Number(meta.data.market_cap).toLocaleString();          const supply = Number(meta.data.supply).toLocaleString();
 
