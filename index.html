@@ -340,56 +340,18 @@
     <a href="https://believe.app" style="color: #444; font-weight: 500; text-decoration: none; margin: 0 10px;" target="_blank">$SNIF</a>
 </footer>
 <script>
-// Override top holders update to prevent flickering and fetch asset info
-const holderAssetCache = {};
 function updateTopHolders(holders) {
-  const holdersList = document.getElementById("holders-list");
-  const mobileList = document.getElementById("holders-list-mobile");
-  if (!holdersList) return;
+  const list = document.getElementById("holders-list");
+  const mobile = document.getElementById("holders-list-mobile");
+  if (!list) return;
 
-  const render = () => {
-    holders.forEach((holder, i) => {
-      const shortAddr = holder.address.slice(0, 4) + "..." + holder.address.slice(-4);
-      const asset = holderAssetCache[holder.address];
-      let assetText = "🔝 loading...";
-      if (asset) {
-        assetText = asset.symbol === "unknown" ? "🔝 unknown" : `🔝 $${asset.symbol} ($${Number(asset.value).toFixed(1)})`;
-      }
-      const liHTML = `<a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${shortAddr}</a> - ${holder.percentage.toFixed(1)}% · ${assetText}`;
+  list.innerHTML = "";
+  if (mobile) mobile.innerHTML = "";
 
-      if (holdersList.children[i]) {
-        holdersList.children[i].innerHTML = liHTML;
-      } else {
-        const li = document.createElement("li");
-        li.innerHTML = liHTML;
-        holdersList.appendChild(li);
-      }
-      if (mobileList) {
-        if (mobileList.children[i]) {
-          mobileList.children[i].innerHTML = liHTML;
-        } else {
-          const mli = document.createElement("li");
-          mli.innerHTML = liHTML;
-          mobileList.appendChild(mli);
-        }
-      }
-    });
+  const heliusKey = "07bae6e7-fc44-4501-bd71-958318efbeaf";
 
-    [holdersList, mobileList].forEach(list => {
-      if (!list) return;
-      for (let j = holders.length; j < list.children.length; j++) {
-        list.children[j].style.display = "none";
-      }
-    });
-  };
-
-  render();
-
-  const toFetch = holders.filter(h => !holderAssetCache[h.address]).map(h => h.address);
-  if (toFetch.length === 0) return;
-
-  Promise.all(toFetch.map(addr =>
-    fetch("https://mainnet.helius-rpc.com/?api-key=07bae6e7-fc44-4501-bd71-958318efbeaf", {
+  const fetches = holders.map(h =>
+    fetch(`https://mainnet.helius-rpc.com/?api-key=${heliusKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -397,7 +359,7 @@ function updateTopHolders(holders) {
         id: "1",
         method: "getAssetsByOwner",
         params: {
-          ownerAddress: addr,
+          ownerAddress: h.address,
           options: {
             showUnverifiedCollections: false,
             showCollectionMetadata: false,
@@ -413,29 +375,46 @@ function updateTopHolders(holders) {
       .then(r => r.json())
       .then(data => {
         const result = data.result || {};
-        let bestSymbol;
         let bestValue = 0;
+        let bestSymbol;
         const solVal = Number(result.nativeBalance?.total_price || 0);
         if (solVal > bestValue) {
           bestValue = solVal;
           bestSymbol = "SOL";
         }
-        (result.items || []).forEach(it => {
-          const sym = it.content?.metadata?.symbol;
-          const val = Number(it.price_info?.total_price || 0);
+        (result.items || []).forEach(item => {
+          const sym = item.content?.metadata?.symbol;
+          const val = Number(item.price_info?.total_price || 0);
           if (!sym) return;
           if (val > bestValue) {
             bestValue = val;
             bestSymbol = sym;
           }
         });
-        holderAssetCache[addr] = bestSymbol ? { symbol: bestSymbol, value: bestValue } : { symbol: "unknown" };
+        return { symbol: bestSymbol || "unknown", value: bestValue };
       })
-      .catch(err => {
-        console.error(err);
-        holderAssetCache[addr] = { symbol: "unknown" };
-      })
-  )).then(render);
+      .catch(() => ({ symbol: "unknown" }))
+  );
+
+  Promise.all(fetches).then(results => {
+    holders.forEach((holder, i) => {
+      const shortAddr = holder.address.slice(0, 4) + "..." + holder.address.slice(-4);
+      const asset = results[i];
+      const assetText = asset.symbol === "unknown"
+        ? "🔝 unknown"
+        : `🔝 ${asset.symbol} ($${asset.value.toFixed(1)})`;
+      const liHTML = `<a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${shortAddr}</a> - ${holder.percentage.toFixed(1)}% · ${assetText}`;
+
+      const li = document.createElement("li");
+      li.innerHTML = liHTML;
+      list.appendChild(li);
+      if (mobile) {
+        const mli = document.createElement("li");
+        mli.innerHTML = liHTML;
+        mobile.appendChild(mli);
+      }
+    });
+  });
 }
 </script><script>
     let tokenInterval;
