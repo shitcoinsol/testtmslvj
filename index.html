@@ -417,6 +417,17 @@ function updateTopHolders(holders) {
         return `${amountFormatted} (${usdFormatted})`;
     }
 
+    function formatNumber(num) {
+        if (num >= 1_000_000_000) return (num / 1_000_000_000).toFixed(2) + 'b';
+        if (num >= 1_000_000) return (num / 1_000_000).toFixed(2) + 'm';
+        if (num >= 1_000) return (num / 1_000).toFixed(2) + 'k';
+        return num.toFixed(2);
+    }
+
+    function formatUSD(num) {
+        return '$' + formatNumber(num);
+    }
+
     async function fetchHolderAsset(address) {
         try {
             const body = {
@@ -436,31 +447,43 @@ function updateTopHolders(holders) {
                     }
                 }
             };
+
             const res = await fetch('https://mainnet.helius-rpc.com/?api-key=07bae6e7-fc44-4501-bd71-958318efbeaf', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
             });
+
             const data = await res.json();
             const result = data.result || {};
-            let maxVal = Number(result.nativeBalance?.total_price || 0);
-            let symbol = 'SOL';
-            let display = maxVal.toFixed(2);
+
+            // 1. SOL
+            const solValue = Number(result.nativeBalance?.total_price || 0);
+            const solAmount = Number(result.nativeBalance?.lamports || 0) / 1e9;
+            let best = {
+                value: solValue,
+                symbol: 'SOL',
+                amount: solAmount
+            };
+
+            // 2. SPL
             const items = Array.isArray(result.items) ? result.items : [];
             for (const it of items) {
                 const price = Number(it.token_info?.price_info?.total_price || 0);
-                if (price > maxVal) {
-                    maxVal = price;
-                    symbol = it.token_info?.symbol || '';
-                    const bal = Number(it.token_info?.balance || 0) / Math.pow(10, Number(it.token_info?.decimals || 0));
-                    display = bal.toFixed(2);
+                if (price > best.value) {
+                    const balance = Number(it.token_info?.balance || 0);
+                    const decimals = Number(it.token_info?.decimals || 0);
+                    best = {
+                        value: price,
+                        symbol: it.token_info?.symbol || '',
+                        amount: balance / Math.pow(10, decimals)
+                    };
                 }
             }
-            if (symbol === 'SOL') {
-                return `SOL · ${Number(display).toFixed(2)}`;
-            }
-            return `${symbol} · ${display}`;
+
+            return `${best.symbol} · ${formatNumber(best.amount)} (${formatUSD(best.value)})`;
         } catch (e) {
+            console.error("fetchHolderAsset failed:", e);
             return 'N/A';
         }
     }
