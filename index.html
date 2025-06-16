@@ -319,6 +319,14 @@
   color: #666;
   margin-top: 4px;
 }
+/* Fade in top holders */
+.top-holder {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.top-holder.loaded {
+  opacity: 1;
+}
 
 /* Responsive toggling */
 .pc-version { display: block; }
@@ -375,6 +383,7 @@ function updateTopHolders(holders) {
     let tokenInterval;
     let holdersInterval;
     let currentCA = '';
+    let cachedTopHolders = [];
 
     function handleKeyPress(e) {
       if (e.key === "Enter") searchToken();
@@ -432,33 +441,57 @@ function updateTopHolders(holders) {
         }
     }
 
-    function fetchTopHolders(ca, apiKey, listId = 'holders-list') {
+    function renderTopHolderList(list, holders) {
+        list.innerHTML = '';
+        holders.forEach(h => {
+            const li = document.createElement('li');
+            li.className = 'top-holder';
+            const short = `${h.address.slice(0,4)}...${h.address.slice(-4)}`;
+            li.innerHTML = `<a class="address-link" href="https://solscan.io/account/${h.address}" target="_blank">${short}</a> - ${h.percentage.toFixed(1)}%`;
+            const div = document.createElement('div');
+            div.className = 'top-holder-asset';
+            div.textContent = h.asset;
+            li.appendChild(div);
+            list.appendChild(li);
+        });
+        requestAnimationFrame(() => {
+            list.querySelectorAll('.top-holder').forEach(el => el.classList.add('loaded'));
+        });
+    }
+
+    function fetchTopHolders(ca, apiKey, listId = 'holders-list', loadingId = 'top-holders-loading') {
         const list = document.getElementById(listId);
+        const loadingEl = document.getElementById(loadingId);
         if (!list) return;
+
+        if (cachedTopHolders.length === 0 && loadingEl) {
+            loadingEl.style.display = 'block';
+        }
+
         const url = `https://pro-api.solscan.io/v2.0/token/holders?address=${ca}&page=1&page_size=10`;
         fetch(url, { headers: { token: apiKey } })
         .then(r => r.json())
         .then(async data => {
           if (!data || !data.data) throw new Error('holder fail');
-          list.innerHTML = '';
           const items = data.data.items.slice(0, 10);
-          for (const it of items) {
+          const results = await Promise.all(items.map(async it => {
             const addr = it.owner;
             const pct = Number(it.percentage || 0);
-            const short = `${addr.slice(0,4)}...${addr.slice(-4)}`;
-            const li = document.createElement('li');
-            li.innerHTML = `<a class="address-link" href="https://solscan.io/account/${addr}" target="_blank">${short}</a> - ${pct.toFixed(1)}%`;
-            list.appendChild(li);
-            const asset = await fetchHolderAsset(addr);
-            const div = document.createElement('div');
-            div.className = 'top-holder-asset';
-            div.textContent = asset;
-            li.appendChild(div);
-          }
+            const asset = await fetchHolderAsset(addr).catch(() => 'N/A');
+            return { address: addr, percentage: pct, asset };
+          }));
+          cachedTopHolders = results;
+          if (loadingEl) loadingEl.style.display = 'none';
+          renderTopHolderList(list, results);
         })
         .catch(err => {
           console.error(err);
-          list.innerHTML = '<li>Error loading holders</li>';
+          if (cachedTopHolders.length > 0) {
+            if (loadingEl) loadingEl.style.display = 'none';
+            renderTopHolderList(list, cachedTopHolders);
+          } else {
+            list.innerHTML = '<li>Error loading holders</li>';
+          }
         });
     }
 
@@ -637,6 +670,7 @@ function updateTopHolders(holders) {
 <!-- Chart Placeholder -->
 </div></div><div class="info-grid"><div class="top-holders info-card">
 <h3>Top Holders</h3>
+  <div id="top-holders-loading" style="display:none">Loading Top Holders...</div>
   <ul id="holders-list">
   </ul>
 </div><div class="holder-change info-card">
@@ -689,6 +723,7 @@ function updateTopHolders(holders) {
 </div>
 <div style="margin-top:20px;">
 <h3 style="font-size:16px; border-left:4px solid #61c5ff; padding-left:8px;">Top Holders</h3>
+  <div id="top-holders-loading-mobile" style="display:none">Loading Top Holders...</div>
   <ul id="holders-list-mobile" style="font-size:14px;">
   </ul>
 </div>
@@ -786,8 +821,8 @@ function updateTopHolders(holders) {
           fetchDevHistory(ca, solscanKey);
           fetchDevActivity(ca, solscanKey, heliusKey);
           if (holdersInterval) clearInterval(holdersInterval);
-          fetchTopHolders(ca, solscanKey, 'holders-list-mobile');
-          holdersInterval = setInterval(() => fetchTopHolders(ca, solscanKey, 'holders-list-mobile'), 10000);
+          fetchTopHolders(ca, solscanKey, 'holders-list-mobile', 'top-holders-loading-mobile');
+          holdersInterval = setInterval(() => fetchTopHolders(ca, solscanKey, 'holders-list-mobile', 'top-holders-loading-mobile'), 10000);
         })
         .catch((err) => {
           console.error(err);
