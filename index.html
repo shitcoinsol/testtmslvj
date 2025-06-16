@@ -509,7 +509,8 @@ function updateTopHolders(holders) {
                 if (isNaN(amt)) amt = 0;
                 return {
                     address: it.owner || it.address,
-                    amount: amt
+                    amount: amt,
+                    percentage: it.percentage || 0
                 };
             });
 
@@ -519,11 +520,12 @@ function updateTopHolders(holders) {
             for (const holder of enriched) {
                 const short = `${holder.address.slice(0, 4)}...${holder.address.slice(-4)}`;
                 const displayText = await fetchHolderAsset(holder.address);
+                const percentText = `${holder.percentage.toFixed(1)}%`;
                 const li = document.createElement('li');
                 li.className = 'holder-entry';
                 li.innerHTML = `
         <a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${short}</a>
-        <div class="holder-right">${displayText}</div>`;
+        <div class="holder-right">${displayText} <span style="color:#888; font-weight:normal;">(${percentText})</span></div>`;
                 list.appendChild(li);
             }
 
@@ -538,11 +540,12 @@ function updateTopHolders(holders) {
                 for (const holder of cachedTopHolders) {
                     const short = `${holder.address.slice(0, 4)}...${holder.address.slice(-4)}`;
                     const displayText = await fetchHolderAsset(holder.address);
+                    const percentText = `${holder.percentage.toFixed(1)}%`;
                     const li = document.createElement('li');
                     li.className = 'holder-entry';
                     li.innerHTML = `
           <a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${short}</a>
-          <div class="holder-right">${displayText}</div>`;
+          <div class="holder-right">${displayText} <span style="color:#888; font-weight:normal;">(${percentText})</span></div>`;
                     list.appendChild(li);
                 }
             } else {
