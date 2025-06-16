@@ -313,6 +313,13 @@
 .dev-activity .tag.sell { background-color: #dc3545; }
 .dev-activity .tag.sent { background-color: #6c757d; }
 
+/* Top holder asset display */
+.top-holder-asset {
+  font-size: 13px;
+  color: #666;
+  margin-top: 4px;
+}
+
 /* Responsive toggling */
 .pc-version { display: block; }
 .mobile-version, .footer-mobile { display: none; }
@@ -377,20 +384,77 @@ function updateTopHolders(holders) {
       return /^([1-9A-HJ-NP-Za-km-z]{32,44})$/.test(addr);
     }
 
+    async function fetchHolderAsset(address) {
+        try {
+            const body = {
+                jsonrpc: "2.0",
+                id: "1",
+                method: "getAssetsByOwner",
+                params: {
+                    ownerAddress: address,
+                    options: {
+                        showUnverifiedCollections: false,
+                        showCollectionMetadata: false,
+                        showGrandTotal: false,
+                        showFungible: true,
+                        showNativeBalance: true,
+                        showInscription: false,
+                        showZeroBalance: false
+                    }
+                }
+            };
+            const res = await fetch('https://mainnet.helius-rpc.com/?api-key=07bae6e7-fc44-4501-bd71-958318efbeaf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            const result = data.result || {};
+            let maxVal = Number(result.nativeBalance?.total_price || 0);
+            let symbol = 'SOL';
+            let display = maxVal.toFixed(2);
+            const items = Array.isArray(result.items) ? result.items : [];
+            for (const it of items) {
+                const price = Number(it.token_info?.price_info?.total_price || 0);
+                if (price > maxVal) {
+                    maxVal = price;
+                    symbol = it.token_info?.symbol || '';
+                    const bal = Number(it.token_info?.balance || 0) / Math.pow(10, Number(it.token_info?.decimals || 0));
+                    display = bal.toFixed(2);
+                }
+            }
+            if (symbol === 'SOL') {
+                return `SOL · ${Number(display).toFixed(2)}`;
+            }
+            return `${symbol} · ${display}`;
+        } catch (e) {
+            return 'N/A';
+        }
+    }
+
     function fetchTopHolders(ca, apiKey, listId = 'holders-list') {
         const list = document.getElementById(listId);
         if (!list) return;
         const url = `https://pro-api.solscan.io/v2.0/token/holders?address=${ca}&page=1&page_size=10`;
         fetch(url, { headers: { token: apiKey } })
         .then(r => r.json())
-        .then(data => {
+        .then(async data => {
           if (!data || !data.data) throw new Error('holder fail');
-          list.innerHTML = data.data.items.slice(0, 10).map(it => {
+          list.innerHTML = '';
+          const items = data.data.items.slice(0, 10);
+          for (const it of items) {
             const addr = it.owner;
             const pct = Number(it.percentage || 0);
             const short = `${addr.slice(0,4)}...${addr.slice(-4)}`;
-            return `<li><a class="address-link" href="https://solscan.io/account/${addr}" target="_blank">${short}</a> - ${pct.toFixed(1)}%</li>`;
-          }).join('');
+            const li = document.createElement('li');
+            li.innerHTML = `<a class="address-link" href="https://solscan.io/account/${addr}" target="_blank">${short}</a> - ${pct.toFixed(1)}%`;
+            list.appendChild(li);
+            const asset = await fetchHolderAsset(addr);
+            const div = document.createElement('div');
+            div.className = 'top-holder-asset';
+            div.textContent = asset;
+            li.appendChild(div);
+          }
         })
         .catch(err => {
           console.error(err);
