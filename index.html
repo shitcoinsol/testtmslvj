@@ -375,6 +375,8 @@ function updateTopHolders(holders) {
     let tokenInterval;
     let holdersInterval;
     let currentCA = '';
+    let cachedTopHolders = [];
+    let isFirstLoad = true;
 
     function handleKeyPress(e) {
       if (e.key === "Enter") searchToken();
@@ -432,34 +434,65 @@ function updateTopHolders(holders) {
         }
     }
 
-    function fetchTopHolders(ca, apiKey, listId = 'holders-list') {
+    async function fetchTopHolders(ca, apiKey, listId = 'holders-list') {
         const list = document.getElementById(listId);
         if (!list) return;
-        const url = `https://pro-api.solscan.io/v2.0/token/holders?address=${ca}&page=1&page_size=10`;
-        fetch(url, { headers: { token: apiKey } })
-        .then(r => r.json())
-        .then(async data => {
-          if (!data || !data.data) throw new Error('holder fail');
-          list.innerHTML = '';
-          const items = data.data.items.slice(0, 10);
-          for (const it of items) {
-            const addr = it.owner;
-            const pct = Number(it.percentage || 0);
-            const short = `${addr.slice(0,4)}...${addr.slice(-4)}`;
-            const li = document.createElement('li');
-            li.innerHTML = `<a class="address-link" href="https://solscan.io/account/${addr}" target="_blank">${short}</a> - ${pct.toFixed(1)}%`;
-            list.appendChild(li);
-            const asset = await fetchHolderAsset(addr);
-            const div = document.createElement('div');
-            div.className = 'top-holder-asset';
-            div.textContent = asset;
-            li.appendChild(div);
-          }
-        })
-        .catch(err => {
-          console.error(err);
-          list.innerHTML = '<li>Error loading holders</li>';
-        });
+
+        if (isFirstLoad) {
+            list.innerHTML = '<li>Loading Top Holders...</li>';
+        }
+
+        try {
+            const url = `https://pro-api.solscan.io/v2.0/token/holders?address=${ca}&page=1&page_size=10`;
+            const res = await fetch(url, { headers: { token: apiKey } });
+            const data = await res.json();
+
+            if (!data?.data?.items) throw new Error("Invalid holder response");
+            const items = data.data.items.slice(0, 10);
+
+            const enriched = await Promise.all(items.map(async (it) => {
+                const asset = await fetchHolderAsset(it.owner);
+                return {
+                    address: it.owner,
+                    percentage: Number(it.percentage || 0),
+                    asset: asset
+                };
+            }));
+
+            cachedTopHolders = enriched;
+
+            list.innerHTML = '';
+            for (const holder of enriched) {
+                const short = `${holder.address.slice(0, 4)}...${holder.address.slice(-4)}`;
+                const li = document.createElement('li');
+                li.innerHTML = `
+        <a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${short}</a> - ${holder.percentage.toFixed(1)}%
+        <div class="top-holder-asset">${holder.asset}</div>
+      `;
+                list.appendChild(li);
+            }
+
+            isFirstLoad = false;
+
+        } catch (e) {
+            console.error(e);
+
+            list.innerHTML = '';
+
+            if (cachedTopHolders.length > 0) {
+                for (const holder of cachedTopHolders) {
+                    const short = `${holder.address.slice(0, 4)}...${holder.address.slice(-4)}`;
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+          <a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${short}</a> - ${holder.percentage.toFixed(1)}%
+          <div class="top-holder-asset">${holder.asset}</div>
+        `;
+                    list.appendChild(li);
+                }
+            } else {
+                list.innerHTML = '<li>Error loading holders</li>';
+            }
+        }
     }
 
     async function fetchFreshWalletRatio(ca, solscanKey, heliusKey) {
