@@ -340,81 +340,29 @@
     <a href="https://believe.app" style="color: #444; font-weight: 500; text-decoration: none; margin: 0 10px;" target="_blank">$SNIF</a>
 </footer>
 <script>
+// Override top holders update to prevent flickering
 function updateTopHolders(holders) {
-  const list = document.getElementById("holders-list");
-  const mobile = document.getElementById("holders-list-mobile");
-  if (!list) return;
+  const holdersList = document.getElementById("holders-list");
+  if (!holdersList) return;
 
-  list.innerHTML = "";
-  if (mobile) mobile.innerHTML = "";
+  const existingItems = holdersList.querySelectorAll("li");
+  holders.forEach((holder, i) => {
+    const shortAddr = holder.address.slice(0, 4) + "..." + holder.address.slice(-4);
+    const liHTML = `<a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${shortAddr}</a> - ${holder.percentage.toFixed(1)}%`;
 
-  const heliusKey = "07bae6e7-fc44-4501-bd71-958318efbeaf";
-
-  const fetches = holders.map(h =>
-    fetch(`https://mainnet.helius-rpc.com/?api-key=${heliusKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: "1",
-        method: "getAssetsByOwner",
-        params: {
-          ownerAddress: h.address,
-          options: {
-            showUnverifiedCollections: false,
-            showCollectionMetadata: false,
-            showGrandTotal: false,
-            showFungible: true,
-            showNativeBalance: true,
-            showInscription: false,
-            showZeroBalance: false
-          }
-        }
-      })
-    })
-      .then(r => r.json())
-      .then(data => {
-        const result = data.result || {};
-        let bestValue = 0;
-        let bestSymbol;
-        const solVal = Number(result.nativeBalance?.total_price || 0);
-        if (solVal > bestValue) {
-          bestValue = solVal;
-          bestSymbol = "SOL";
-        }
-        (result.items || []).forEach(item => {
-          const sym = item.content?.metadata?.symbol;
-          const val = Number(item.price_info?.total_price || 0);
-          if (!sym) return;
-          if (val > bestValue) {
-            bestValue = val;
-            bestSymbol = sym;
-          }
-        });
-        return { symbol: bestSymbol || "unknown", value: bestValue };
-      })
-      .catch(() => ({ symbol: "unknown" }))
-  );
-
-  Promise.all(fetches).then(results => {
-    holders.forEach((holder, i) => {
-      const shortAddr = holder.address.slice(0, 4) + "..." + holder.address.slice(-4);
-      const asset = results[i];
-      const assetText = asset.symbol === "unknown"
-        ? "🔝 unknown"
-        : `🔝 ${asset.symbol} ($${asset.value.toFixed(1)})`;
-      const liHTML = `<a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${shortAddr}</a> - ${holder.percentage.toFixed(1)}% · ${assetText}`;
-
+    if (existingItems[i]) {
+      existingItems[i].innerHTML = liHTML;
+    } else {
       const li = document.createElement("li");
       li.innerHTML = liHTML;
-      list.appendChild(li);
-      if (mobile) {
-        const mli = document.createElement("li");
-        mli.innerHTML = liHTML;
-        mobile.appendChild(mli);
-      }
-    });
+      holdersList.appendChild(li);
+    }
   });
+
+  // Optional: hide extra items if new list is shorter
+  for (let j = holders.length; j < existingItems.length; j++) {
+    existingItems[j].style.display = "none";
+  }
 }
 </script><script>
     let tokenInterval;
@@ -429,24 +377,24 @@ function updateTopHolders(holders) {
       return /^([1-9A-HJ-NP-Za-km-z]{32,44})$/.test(addr);
     }
 
-    function fetchTopHolders(ca, apiKey) {
+    function fetchTopHolders(ca, apiKey, listId = 'holders-list') {
+        const list = document.getElementById(listId);
+        if (!list) return;
         const url = `https://pro-api.solscan.io/v2.0/token/holders?address=${ca}&page=1&page_size=10`;
         fetch(url, { headers: { token: apiKey } })
         .then(r => r.json())
         .then(data => {
           if (!data || !data.data) throw new Error('holder fail');
-          const holders = data.data.items.slice(0, 10).map(it => ({
-            address: it.owner,
-            percentage: Number(it.percentage || 0)
-          }));
-          updateTopHolders(holders);
+          list.innerHTML = data.data.items.slice(0, 10).map(it => {
+            const addr = it.owner;
+            const pct = Number(it.percentage || 0);
+            const short = `${addr.slice(0,4)}...${addr.slice(-4)}`;
+            return `<li><a class="address-link" href="https://solscan.io/account/${addr}" target="_blank">${short}</a> - ${pct.toFixed(1)}%</li>`;
+          }).join('');
         })
         .catch(err => {
           console.error(err);
-          const list = document.getElementById('holders-list');
-          if (list) list.innerHTML = '<li>Error loading holders</li>';
-          const mobile = document.getElementById('holders-list-mobile');
-          if (mobile && mobile !== list) mobile.innerHTML = '<li>Error loading holders</li>';
+          list.innerHTML = '<li>Error loading holders</li>';
         });
     }
 
@@ -774,8 +722,8 @@ function updateTopHolders(holders) {
           fetchDevHistory(ca, solscanKey);
           fetchDevActivity(ca, solscanKey, heliusKey);
           if (holdersInterval) clearInterval(holdersInterval);
-          fetchTopHolders(ca, solscanKey);
-          holdersInterval = setInterval(() => fetchTopHolders(ca, solscanKey), 10000);
+          fetchTopHolders(ca, solscanKey, 'holders-list-mobile');
+          holdersInterval = setInterval(() => fetchTopHolders(ca, solscanKey, 'holders-list-mobile'), 10000);
         })
         .catch((err) => {
           console.error(err);
