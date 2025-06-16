@@ -340,29 +340,102 @@
     <a href="https://believe.app" style="color: #444; font-weight: 500; text-decoration: none; margin: 0 10px;" target="_blank">$SNIF</a>
 </footer>
 <script>
-// Override top holders update to prevent flickering
+// Override top holders update to prevent flickering and fetch asset info
+const holderAssetCache = {};
 function updateTopHolders(holders) {
   const holdersList = document.getElementById("holders-list");
+  const mobileList = document.getElementById("holders-list-mobile");
   if (!holdersList) return;
 
-  const existingItems = holdersList.querySelectorAll("li");
-  holders.forEach((holder, i) => {
-    const shortAddr = holder.address.slice(0, 4) + "..." + holder.address.slice(-4);
-    const liHTML = `<a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${shortAddr}</a> - ${holder.percentage.toFixed(1)}%`;
+  const render = () => {
+    holders.forEach((holder, i) => {
+      const shortAddr = holder.address.slice(0, 4) + "..." + holder.address.slice(-4);
+      const asset = holderAssetCache[holder.address];
+      let assetText = "🔝 loading...";
+      if (asset) {
+        assetText = asset.symbol === "unknown" ? "🔝 unknown" : `🔝 ${asset.symbol} ($${Number(asset.value).toFixed(1)})`;
+      }
+      const liHTML = `<a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${shortAddr}</a> - ${holder.percentage.toFixed(1)}% · ${assetText}`;
 
-    if (existingItems[i]) {
-      existingItems[i].innerHTML = liHTML;
-    } else {
-      const li = document.createElement("li");
-      li.innerHTML = liHTML;
-      holdersList.appendChild(li);
-    }
-  });
+      if (holdersList.children[i]) {
+        holdersList.children[i].innerHTML = liHTML;
+      } else {
+        const li = document.createElement("li");
+        li.innerHTML = liHTML;
+        holdersList.appendChild(li);
+      }
+      if (mobileList) {
+        if (mobileList.children[i]) {
+          mobileList.children[i].innerHTML = liHTML;
+        } else {
+          const mli = document.createElement("li");
+          mli.innerHTML = liHTML;
+          mobileList.appendChild(mli);
+        }
+      }
+    });
 
-  // Optional: hide extra items if new list is shorter
-  for (let j = holders.length; j < existingItems.length; j++) {
-    existingItems[j].style.display = "none";
-  }
+    [holdersList, mobileList].forEach(list => {
+      if (!list) return;
+      for (let j = holders.length; j < list.children.length; j++) {
+        list.children[j].style.display = "none";
+      }
+    });
+  };
+
+  render();
+
+  const toFetch = holders.filter(h => !holderAssetCache[h.address]).map(h => h.address);
+  if (toFetch.length === 0) return;
+
+  Promise.all(toFetch.map(addr =>
+    fetch("https://mainnet.helius-rpc.com/?api-key=07bae6e7-fc44-4501-bd71-958318efbeaf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "1",
+        method: "getAssetsByOwner",
+        params: {
+          ownerAddress: addr,
+          options: {
+            showUnverifiedCollections: false,
+            showCollectionMetadata: false,
+            showGrandTotal: false,
+            showFungible: true,
+            showNativeBalance: true,
+            showInscription: false,
+            showZeroBalance: false
+          }
+        }
+      })
+    })
+      .then(r => r.json())
+      .then(data => {
+        const result = data.result || {};
+        let bestSymbol;
+        let bestValue = 0;
+        const solVal = Number(result.nativeBalance?.total_price || 0);
+        if (solVal > bestValue) {
+          bestValue = solVal;
+          bestSymbol = "SOL";
+        }
+        (result.items || []).forEach(it => {
+          const sym = it.content?.metadata?.symbol;
+          const val = Number(it.ownership?.amount || 0);
+          if (!sym || !val) return;
+          if (val > bestValue) {
+            bestValue = val;
+            bestSymbol = sym;
+          }
+        });
+        holderAssetCache[addr] = bestSymbol ? { symbol: bestSymbol, value: bestValue } : { symbol: "unknown" };
+      })
+      .catch(err => {
+        console.error(err);
+        holderAssetCache[addr] = { symbol: "unknown" };
+      })
+  )).then(render);
 }
 </script><script>
     let tokenInterval;
