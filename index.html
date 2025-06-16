@@ -397,9 +397,24 @@ function updateTopHolders(holders) {
     }
 
     function formatNumber(num) {
-        if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'm';
-        if (num >= 1_000) return (num / 1_000).toFixed(1) + 'k';
-        return num.toString();
+        if (num >= 1_000_000_000) return (num / 1_000_000_000).toFixed(2) + 'b';
+        if (num >= 1_000_000) return (num / 1_000_000).toFixed(2) + 'm';
+        if (num >= 1_000) return (num / 1_000).toFixed(2) + 'k';
+        return Number(num).toFixed(2);
+    }
+
+    function formatUSD(value) {
+        return '$' + formatNumber(value);
+    }
+
+    function formatTokenDisplay(rawAmount, decimals, tokenPrice) {
+        const trueAmount = rawAmount / Math.pow(10, decimals);
+        const usdValue = trueAmount * tokenPrice;
+
+        const amountFormatted = formatNumber(trueAmount);
+        const usdFormatted = formatUSD(usdValue);
+
+        return `${amountFormatted} (${usdFormatted})`;
     }
 
     async function fetchHolderAsset(address) {
@@ -480,14 +495,12 @@ function updateTopHolders(holders) {
             list.innerHTML = '';
             for (const holder of enriched) {
                 const short = `${holder.address.slice(0, 4)}...${holder.address.slice(-4)}`;
-                const displayAmount = formatNumber(holder.amount) + ' ' + currentTokenSymbol;
-                const usd = holder.amount * currentTokenPrice;
-                const displayUSD = '$' + formatNumber(usd);
+                const displayText = formatTokenDisplay(holder.amount, currentTokenDecimals, currentTokenPrice);
                 const li = document.createElement('li');
                 li.className = 'holder-entry';
                 li.innerHTML = `
         <a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${short}</a>
-        <div class="holder-right">${displayAmount} · ${displayUSD}</div>`;
+        <div class="holder-right">${displayText}</div>`;
                 list.appendChild(li);
             }
 
@@ -501,14 +514,12 @@ function updateTopHolders(holders) {
             if (cachedTopHolders.length > 0) {
                 for (const holder of cachedTopHolders) {
                     const short = `${holder.address.slice(0, 4)}...${holder.address.slice(-4)}`;
-                    const displayAmount = formatNumber(holder.amount) + ' ' + currentTokenSymbol;
-                    const usd = holder.amount * currentTokenPrice;
-                    const displayUSD = '$' + formatNumber(usd);
+                    const displayText = formatTokenDisplay(holder.amount, currentTokenDecimals, currentTokenPrice);
                     const li = document.createElement('li');
                     li.className = 'holder-entry';
                     li.innerHTML = `
           <a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${short}</a>
-          <div class="holder-right">${displayAmount} · ${displayUSD}</div>`;
+          <div class="holder-right">${displayText}</div>`;
                     list.appendChild(li);
                 }
             } else {
@@ -1108,10 +1119,9 @@ async function fetchRecentSwaps() {
   }
 }
 
+// Reuse the global formatter for USD values
 function formatUSD(amount) {
-  if (amount >= 1000000) return `$${(amount / 1e6).toFixed(1)}m`;
-  if (amount >= 1000) return `$${(amount / 1e3).toFixed(1)}k`;
-  return `$${Math.round(amount)}`;
+  return '$' + formatNumber(amount);
 }
 
 function timeAgo(date) {
