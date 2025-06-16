@@ -353,7 +353,7 @@ function updateTopHolders(holders) {
       const asset = holderAssetCache[holder.address];
       let assetText = "🔝 loading...";
       if (asset) {
-        assetText = asset.symbol === "unknown" ? "🔝 unknown" : `🔝 ${asset.symbol} ($${Number(asset.value).toFixed(1)})`;
+        assetText = asset.symbol === "unknown" ? "🔝 unknown" : `🔝 $${asset.symbol} ($${Number(asset.value).toFixed(1)})`;
       }
       const liHTML = `<a class="address-link" href="https://solscan.io/account/${holder.address}" target="_blank">${shortAddr}</a> - ${holder.percentage.toFixed(1)}% · ${assetText}`;
 
@@ -422,8 +422,8 @@ function updateTopHolders(holders) {
         }
         (result.items || []).forEach(it => {
           const sym = it.content?.metadata?.symbol;
-          const val = Number(it.ownership?.amount || 0);
-          if (!sym || !val) return;
+          const val = Number(it.price_info?.total_price || 0);
+          if (!sym) return;
           if (val > bestValue) {
             bestValue = val;
             bestSymbol = sym;
